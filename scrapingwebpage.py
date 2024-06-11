@@ -121,7 +121,7 @@ with ThreadPoolExecutor(max_workers=5) as executor:
             results.append(result)
 
 # Save results to a JSON file
-output_file = 'listing_data.json'
+output_file = 'data/listing_data.json'
 with open(output_file, 'w') as file:
     json.dump(results, file, indent=4)
 
