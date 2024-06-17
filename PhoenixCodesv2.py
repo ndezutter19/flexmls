@@ -119,6 +119,7 @@ def make_request(stNumber: int, stDirection: chr, stName: str):
     return property
 
 def write_result(result):
+    print("Writing result")
     with open(f'data/PhoenixAddressesResults-{time_stamp}.json', 'a') as file_out:
         file_out.write(json.dumps(result) + '\n')
 
@@ -128,8 +129,6 @@ def scrape_violations(address_list, lock, write_lock):
         lock.acquire()
         address = address_list.pop()
         lock.release()
-        
-        print(f"Proccessing Address: {address['Property Address']}")
         
         try:
             # Breakdown address into constituent parts...
@@ -180,7 +179,7 @@ result_buffer = []
 global total_length
 global time_stamp
 current_time = datetime.now()
-time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}"
+time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}[{current_time.hour}:{current_time.minute}:{current_time.second}]"
 total_length = len(houses)
 output = run_threads(4, houses, lock, write_lock)
 
