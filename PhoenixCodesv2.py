@@ -1,15 +1,15 @@
 import logging
 import requests
 import time
-import util.ScrapeTools as ScrapeTools
-import json
-import os
+import util.AddressHelper as AddressHelper
+import futureproof
 from lxml import etree
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import concurrent.futures
 import threading
-from pprint import pprint
+import traceback
+import json
 
 MONTHS_RECENT = 6
 form_url = "https://nsdonline.phoenix.gov"
@@ -118,40 +118,48 @@ def make_request(stNumber: int, stDirection: chr, stName: str):
         logging.error(f"There was an error when parsing address: {stNumber} {stDirection} {stName}", exc_info=True)
     return property
 
+def write_result(result):
+    with open(f'data/PhoenixAddressesResults-{time_stamp}.json', 'a') as file_out:
+        file_out.write(json.dumps(result) + '\n')
 
-def scrape_violations(address_list, lock):
-    data = {}
+def scrape_violations(address_list, lock, write_lock):
     while len(address_list) != 0:
         # Get the lock to pop address safely...
         lock.acquire()
         address = address_list.pop()
         lock.release()
         
-        print(f"Proccessing Address: {address}")
-        breakdown = ScrapeTools.break_down_address_op(address)
+        print(f"Proccessing Address: {address['Property Address']}")
         
         try:
             # Breakdown address into constituent parts...
+            breakdown = AddressHelper.parse_address_csv(address['Property Address'])
             stNum = breakdown['streetNum']
             stDir = breakdown['streetDirection']
-            stType = ScrapeTools.get_abbreviated(breakdown['streetType'])
+            stType = breakdown['streetType']
             stName = f"{breakdown['streetName']} {stType}"
             
             cases = make_request(stNum, stDir, stName)
             if len(cases.keys()) > 0:
-                data[address] = cases
+                write_lock.acquire()
+                write_result({address['Property Address']: cases})
+                write_lock.release()
         except TypeError:
             # If an error occurs here it should be due to an address being incorrectly formatted so log as warning...
-            logging.WARNING(f"Error in input data, address: {address}")
+            logging.warning(f"Error in input data, address: {address['Property Address']}")
+            traceback.print_exc()
             continue
-    
-    return data
+        except:
+            print("Error occurred, exiting...")
+            traceback.print_exc()
+            return
+    return True
 
-def run_threads(noThreads, addressList, lock):
+def run_threads(noThreads, addressList, lock, write_lock):
     # Simple multithread...
-    with concurrent.futures.ThreadPoolExecutor(max_workers=noThreads) as executor:
+    with futureproof.ThreadPoolExecutor(max_workers=noThreads + 1) as executor:
         # Submit tasks to the executor
-        futures = [executor.submit(scrape_violations, addressList, lock) for i in range(noThreads)]
+        futures = [executor.submit(scrape_violations, addressList, lock, write_lock) for i in range(noThreads)]
         
         # Collect results as they complete
         results = {}
@@ -163,17 +171,18 @@ def run_threads(noThreads, addressList, lock):
 
 # Timer for speed run fun...
 start_time = time.time()
-with open(os.path.join('data/PhoenixAddresses.json'), 'r') as f:
-    # Create a lock to pass to all threads to prevent race conditions when accessing houses list...
-    lock = threading.Lock()
-    houses = json.loads(f.read())['addresses']
-    global total_length
-    total_length = len(houses)
-    output = run_threads(4, houses, lock)
-    
-    # Write our to results file...
-    with open('data/PhoenixAddressesResults.json', 'w') as res:
-        res.write(json.dumps(output))
+# Create a lock to pass to all threads to prevent race conditions when accessing houses list...
+lock = threading.Lock()
+write_lock = threading.Lock()
+res_lock = threading.Lock()
+houses = AddressHelper.get_addresses_csv()
+result_buffer = []
+global total_length
+global time_stamp
+current_time = datetime.now()
+time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}"
+total_length = len(houses)
+output = run_threads(4, houses, lock, write_lock)
 
 # Compute total time...
 end_time = time.time()

@@ -2,6 +2,11 @@ from geopy.geocoders import Nominatim
 import json
 import requests
 import time
+import os
+import csv
+import util.ScrapeTools as ScrapeTools
+import logging
+import re
 
 def get_city(geolocator, lat, lng):
     long =  str(lng)
@@ -36,47 +41,72 @@ def run_thread(complete_flag, buffer: list, end_point: list):
         except IndexError as e:
             time.sleep(5)
 
-def get_addresses_in_city():
-
-    # Define the Overpass API endpoint
+def get_addresses():
     overpass_url = "http://overpass-api.de/api/interpreter"
-
-    # Define the Overpass query
-    # This query retrieves the first 10 nodes and ways tagged as residential buildings within Phoenix, AZ.
-    overpass_query = """
-    [out:json][timeout:25];
-    area["name"="Phoenix"]["boundary"="administrative"]["admin_level"="8"]->.searchArea;
-    (
-    node["building"="residential"](area.searchArea);
-    way["building"="residential"](area.searchArea);
-    node["building"="house"](area.searchArea);
-    way["building"="house"](area.searchArea);
-    node["building"="apartments"](area.searchArea);
-    way["building"="apartments"](area.searchArea);
-    node["building"="detached"](area.searchArea);
-    way["building"="detached"](area.searchArea);
-    node["building"="semi-detached"](area.searchArea);
-    way["building"="semi-detached"](area.searchArea);
-    node["building"="terrace"](area.searchArea);
-    way["building"="terrace"](area.searchArea);
-    );
-    out body;
+    query = """
+    [out:json];
+    node["addr:street"]["addr:housenumber"]["addr:city"="Phoenix"](33.29026, -112.32462, 33.83972, -111.92556);
+    out;
     """
-
-    # Make the request to the Overpass API
-    response = requests.post(overpass_url, data={'data': overpass_query})
-    data = response.json()
-    addresses = []
-
-    for element in data['elements']:
-        if 'tags' in element and 'addr:housenumber' in element['tags']:
-            address = element['tags'].get('addr:street', '') + ' ' + element['tags']['addr:housenumber']
-            addresses.append(address)
     
-    return addresses
+    response = requests.get(overpass_url, params={'data': query})
+    resp_json = response.json()
+    data = resp_json['elements']
+    print(f"Pre-sanitization Length: {len(data)}")
+    data = sanitize_data(data)
+    print(f"Post-sanitization Length: {len(data)}")
+    with open('data/sanitized_addresses.json', 'w') as f:
+        addresses = {'addresses': data}
+        json.dump(addresses, f)
+        
+def get_addresses_csv():
+    with open('data/PhoenixAddr1of2.CSV', mode ='r') as file:    
+        csvFile = csv.DictReader(file)
+        listed = []
+        for line in csvFile:
+            listed.append(line)
+        return listed
 
-data = {}
-with open("data/PhoenixAddresses.json", 'w') as pj:
-    data['addresses'] = get_addresses_in_city()
-    serialized = json.dumps(data)
-    pj.write(serialized)
+def parse_address_csv(address):
+    # Log the input address
+    logging.debug(f"Parsing address: {address}")
+
+    # Define the regular expression pattern
+    pattern = (
+        r'(?P<streetNum>\d+)\s+'
+        r'(?P<streetDirection>[NSEW])\s+'
+        r'(?P<streetName>[a-zA-Z0-9\s]+?)\s+'
+        r'(?P<streetType>St|Dr|Rd|Ave|Blvd|Ln|Ct|Pl|Terr|Cir|Pkwy|Way|Trl)\s*'
+        r'(?:Unit\s*(?P<unitNo>\d+))?'
+    )
+    logging.debug(f"Using pattern: {pattern}")
+
+    # Match the pattern against the address
+    match = re.match(pattern, address, re.IGNORECASE)
+    
+    if match:
+        logging.debug("Address matched successfully.")
+        return match.groupdict()
+    else:
+        logging.warning("Address could not be parsed.")
+        return None
+    
+def sanitize_data(data: list):
+    sanitized = []
+    for element in data:
+        if 'amenity' in element['tags'].keys() or 'shop' in element['tags'].keys():
+            continue
+        street_route = element['tags']['addr:street'].split(' ')
+        street_direction = (street_route[0])[0]
+        street_type = ScrapeTools.get_abbreviated(street_route[len(street_route) - 1])
+        name_list = street_route[1:len(street_route) - 1]
+        street_name = ' '.join(name_list)
+        
+        sanitized.append({
+            'number': element['tags']['addr:housenumber'],
+            'streetName': street_name,
+            'streetDir': street_direction,
+            'streetType': street_type,
+        })
+    
+    return sanitized
