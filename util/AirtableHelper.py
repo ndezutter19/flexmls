@@ -2,6 +2,8 @@ from pyairtable import Api
 from pyairtable import Table
 from pyairtable.formulas import match
 import json
+import time
+import os
 
 code_vio_entry = {
     'Address': '',
@@ -19,13 +21,14 @@ violation_entry = {
     'Name': '',
 }
 
-def get_airtable(access_token='patM7pCnUBUzFM8UB.a7a17ac72d151b4d986a1ad587c613d4803dd34b68c22ea7d98351fe683f36f7'):
+def get_airtable(access_token):
     at = Api(access_token)
     return at
 
 def import_violations_data(file):
     base_id = 'appKY7QOvCIoZwI6b'
-    api = get_airtable()
+    key = os.getenv('AIRTABLE_API_KEY')
+    api = get_airtable(key)
     line = file.readline()
     
     code_vio_table = api.table(base_id, 'Code Violations')
@@ -55,9 +58,11 @@ def import_violations_data(file):
 
         frm = match({'Address': address})
         response = code_vio_table.all(formula=frm)
+        time.sleep(0.1)
         if response == []:
             new_entry = code_vio_entry
             new_entry['Address'] = address
+            time.sleep(0.1)
             response = code_vio_table.create(new_entry)
             code_vio_id = response['id']
         else:
@@ -68,11 +73,13 @@ def import_violations_data(file):
             # Check if case exists...
             frm = match({'Case Number': id})
             response = cases_table.all(formula=frm)
+            time.sleep(0.1)
             if response == []:
                 new_entry = case_entry
                 new_entry['Case Number'] = id
                 new_entry['Address'] = [code_vio_id]
                 response = cases_table.create(new_entry)
+                time.sleep(0.1)
                 case_id = response['id']
             else:
                 case_id = response[0].get('id')
@@ -82,13 +89,16 @@ def import_violations_data(file):
             violation_types = cases[id]
             reference_ids = get_violation_ids(type_table, violation_types, id, cached_types)
             cases_table.update(case_id, {'Type of Violations': reference_ids})
+            time.sleep(0.1)
         
         response = code_vio_table.get(record_id=code_vio_id)
+        time.sleep(0.1)
         curr_refs = response['fields'].get('Cases')
         for item in curr_refs:
             if item != None and item not in record_ids:
                 record_ids.append(curr_refs)
         code_vio_table.update(code_vio_id, {'Cases': record_ids})
+        time.sleep(0.1)
         line = file.readline()
             
         
@@ -110,6 +120,7 @@ def get_violation_ids(table: Table, violation_types, caseNo, cache):
             new_entry['ID'] = vio_id
             new_entry['Name'] = vio_type
             response = table.create(new_entry)
+            time.sleep(0.1)
             cache[vio_id] = response['id']
             
         ref.append(cache[vio_id])
