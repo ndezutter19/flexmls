@@ -94,9 +94,10 @@ def import_violations_data(file):
         response = code_vio_table.get(record_id=code_vio_id)
         time.sleep(0.1)
         curr_refs = response['fields'].get('Cases')
-        for item in curr_refs:
-            if item != None and item not in record_ids:
-                record_ids.append(curr_refs)
+        if curr_refs != None:
+            for item in curr_refs:
+                if item != None and item not in record_ids:
+                    record_ids.append(curr_refs)
         code_vio_table.update(code_vio_id, {'Cases': record_ids})
         time.sleep(0.1)
         line = file.readline()
