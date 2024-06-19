@@ -193,8 +193,7 @@ time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}_{curr
 total_length = len(houses)
 file_name = f"data/PhoeAddrResults-{time_stamp}.json"
 file_name = file_name.replace('\\', '/')
-#output = run_threads(4, houses, lock, write_lock)
-scrape_violations(houses, lock, write_lock)
+output = run_threads(4, houses, lock, write_lock)
 
 # Compute total time...
 end_time = time.time()
