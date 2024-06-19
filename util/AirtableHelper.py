@@ -164,6 +164,5 @@ def run_threads(noThreads, file, file_lock):
         
 with open('data/PhoeAddrResultsTransfer2.json') as f:
     file_lock = threading.Lock()
-    # run_threads(4, f, file_lock)
-    import_violations_data(f, file_lock)
+    run_threads(6, f, file_lock)
     
