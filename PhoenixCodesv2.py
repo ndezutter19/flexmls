@@ -96,7 +96,7 @@ def parse_table(html: str):
                 'owner': owner,
                 'status': case_status,
                 'open date': open_date,
-                'close data': close_date,
+                'close date': close_date,
                 'violations': violations
             }
     

@@ -15,6 +15,9 @@ class EntryFormat(Enum):
     }
     CASE_ENTRY = {
         'Case Number': '',
+        'Owner/Occupant': '',
+        'Status': '',
+        'Open Date': '',
         'Address': [],
         'Type of Violations': []
     }
@@ -65,23 +68,30 @@ def import_violations_data(file, file_lock: threading.Lock):
         
         as_json = json.loads(line)
         
-        address = list(as_json.keys())[0]
-        cases =  as_json[address]
-        case_ids = list(cases.keys())
+        address = as_json['address']
+        cases =  as_json['cases']
         
-        print(f"Adding Address {address}, Case No(s): {case_ids}")
 
         formula = match({'Address': address})
         code_vio_id = does_element_exist(code_vio_table, EntryFormat.CODE_VIO, formula, **{'Address': address})
 
         record_ids = []
-        for id in case_ids:
+        for case_id, case in cases.items():
             # Check if case exists...
-            formula = match({'Case Number': id})
-            case_id = does_element_exist(cases_table, EntryFormat.CASE_ENTRY, formula, **{'Case Number': id})
+            owner = case['owner']
+            status = case['status']
+            open_date = case['open date']
+            close_date = case['close date']
+            
+            formula = match({'Case Number': case_id})
+            arg_dict =  {'Case Number': case_id, 'Owner/Occupant': owner, 'Status': status, 'Open Date': open_date}
+            if not (close_date == '' or close_date is None):
+                arg_dict['Close Date'] = close_date
+            
+            case_id = does_element_exist(cases_table, EntryFormat.CASE_ENTRY, formula, **arg_dict)
             record_ids.append(case_id)
 
-            violation_types = cases[id]
+            violation_types = case['violations']
             reference_ids = get_violation_ids(type_table, violation_types, cached_types)
             cases_table.update(case_id, {'Type of Violations': reference_ids})
         
@@ -97,12 +107,12 @@ def import_violations_data(file, file_lock: threading.Lock):
         line = file.readline()
         file_lock.release()    
 
-def does_element_exist(table: Table, template, formula, **kwargs):
+def does_element_exist(table: Table, template, form, **kwargs):
     if not isinstance(template, EntryFormat):
         raise TypeError('Provided format is invalid.')
     
-    response = table.all(formula)
-    if response == []:
+    resp = table.all(formula=form)
+    if resp == []:
         new_entry = template.value.copy()
         for key, value in kwargs.items():
             if key in new_entry:
@@ -110,11 +120,21 @@ def does_element_exist(table: Table, template, formula, **kwargs):
             else:
                 print(f"Warning: {key} is not a recognized key in the case entry template.")
         
-        response = table.create(new_entry)
-    resp_id = response[0].get('id')
+        resp = table.create(new_entry)
+    elif template is EntryFormat.CASE_ENTRY:
+        check_case_updated(table, resp[0], **kwargs)
+        
+    resp_id = resp[0].get('id')
     
     return resp_id
 
+def check_case_updated(table: Table, resp, **kwargs):
+    r_keys = list(resp['fields'].keys())
+    for key, value in kwargs.items():
+        if key in r_keys and resp['fields'][key] == value:
+            continue
+        table.update(record_id=resp['id'], fields=kwargs)
+        break
     
 
 def get_violation_ids(table: Table, violation_types, cache):
@@ -142,6 +162,8 @@ def run_threads(noThreads, file, file_lock):
         futures = [executor.submit(import_violations_data, file, file_lock) for i in range(noThreads)]
 
         
-with open('data/PhoenixAddressesResultsTransfer.json') as f:
+with open('data/PhoeAddrResultsTransfer2.json') as f:
     file_lock = threading.Lock()
-    run_threads(4, f, file_lock)
+    # run_threads(4, f, file_lock)
+    import_violations_data(f, file_lock)
+    
