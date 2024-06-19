@@ -1,6 +1,8 @@
 from pyairtable import Api
 from pyairtable import Table
 from pyairtable.formulas import match
+import futureproof
+import threading
 import json
 import time
 import os
@@ -25,11 +27,14 @@ def get_airtable(access_token):
     at = Api(access_token)
     return at
 
-def import_violations_data(file):
+def import_violations_data(file, file_lock: threading.Lock):
     base_id = 'appKY7QOvCIoZwI6b'
     key = os.getenv('AIRTABLE_API_KEY')
     api = get_airtable(key)
+    
+    file_lock.acquire()
     line = file.readline()
+    file_lock.release()
     
     code_vio_table = api.table(base_id, 'Code Violations')
     cases_table = api.table(base_id, 'Complaint Cases')
@@ -52,17 +57,16 @@ def import_violations_data(file):
         as_json = json.loads(line)
         
         address = list(as_json.keys())[0]
+        print(f"Adding {address} to airtable.")
         
         cases =  as_json[address]
         case_ids = list(cases.keys())
 
         frm = match({'Address': address})
         response = code_vio_table.all(formula=frm)
-        time.sleep(0.1)
         if response == []:
             new_entry = code_vio_entry
             new_entry['Address'] = address
-            time.sleep(0.1)
             response = code_vio_table.create(new_entry)
             code_vio_id = response['id']
         else:
@@ -87,29 +91,23 @@ def import_violations_data(file):
 
             # Check if the violation types exist within the violations table...
             violation_types = cases[id]
-            reference_ids = get_violation_ids(type_table, violation_types, id, cached_types)
+            reference_ids = get_violation_ids(type_table, violation_types, cached_types)
             cases_table.update(case_id, {'Type of Violations': reference_ids})
-            time.sleep(0.1)
         
         response = code_vio_table.get(record_id=code_vio_id)
-        time.sleep(0.1)
         curr_refs = response['fields'].get('Cases')
         if curr_refs != None:
             for item in curr_refs:
                 if item != None and item not in record_ids:
                     record_ids.append(curr_refs)
         code_vio_table.update(code_vio_id, {'Cases': record_ids})
-        time.sleep(0.1)
+        
+        file_lock.acquire()
         line = file.readline()
-            
-        
-        # Then add the particular cases to the cases list...
-        
-        
-        # Then link these cases to the relevant address in the addresses table...            
+        file_lock.release()    
 
 
-def get_violation_ids(table: Table, violation_types, caseNo, cache):
+def get_violation_ids(table: Table, violation_types, cache):
     ref = []
     for entry in violation_types:
         split = entry.split(' ', 1)
@@ -121,12 +119,19 @@ def get_violation_ids(table: Table, violation_types, caseNo, cache):
             new_entry['ID'] = vio_id
             new_entry['Name'] = vio_type
             response = table.create(new_entry)
-            time.sleep(0.1)
             cache[vio_id] = response['id']
-            
-        ref.append(cache[vio_id])
-    return ref
         
+        if cache[vio_id] not in ref:
+            ref.append(cache[vio_id])
+    return ref
+
+def run_threads(noThreads, file, file_lock):
+    # Simple multithread...
+    with futureproof.ThreadPoolExecutor(max_workers=noThreads) as executor:
+        # Submit tasks to the executor
+        futures = [executor.submit(import_violations_data, file, file_lock) for i in range(noThreads)]
+
         
 with open('data/PhoenixAddressesResultsTransfer.json') as f:
-    import_violations_data(f)
+    file_lock = threading.Lock()
+    run_threads(4, f, file_lock)
