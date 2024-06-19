@@ -10,6 +10,7 @@ import concurrent.futures
 import threading
 import traceback
 import json
+import os
 
 MONTHS_RECENT = 6
 form_url = "https://nsdonline.phoenix.gov"
@@ -80,6 +81,7 @@ def parse_table(html: str):
         case_status = entry_contents[2].text.strip()
         open_date = entry_contents[3].text.strip()
         close_date = entry_contents[4].text
+        owner =  entry_contents[5].text.strip()
         if close_date is not None:
             close_date = close_date.strip()
         
@@ -90,7 +92,13 @@ def parse_table(html: str):
             if len(violations) == 0:
                 continue
             
-            cases[case_link.text] = violations
+            cases[case_link.text] = {
+                'owner': owner,
+                'status': case_status,
+                'open date': open_date,
+                'close data': close_date,
+                'violations': violations
+            }
     
     return cases
 
@@ -120,7 +128,8 @@ def make_request(stNumber: int, stDirection: chr, stName: str):
 
 def write_result(result):
     print("Writing result")
-    with open(f'data/PhoenixAddressesResults-{time_stamp}.json', 'a') as file_out:
+    
+    with open(f'data/PhoeAddrResults-{time_stamp}.json', 'a') as file_out:
         file_out.write(json.dumps(result) + '\n')
 
 def scrape_violations(address_list, lock, write_lock):
@@ -141,7 +150,8 @@ def scrape_violations(address_list, lock, write_lock):
             cases = make_request(stNum, stDir, stName)
             if len(cases.keys()) > 0:
                 write_lock.acquire()
-                write_result({address['Property Address']: cases})
+                write_result({'address': address['Property Address'],
+                              'cases': cases})
                 write_lock.release()
         except TypeError:
             # If an error occurs here it should be due to an address being incorrectly formatted so log as warning...
@@ -177,11 +187,14 @@ res_lock = threading.Lock()
 houses = AddressHelper.get_addresses_csv()
 result_buffer = []
 global total_length
-global time_stamp
+global file_name
 current_time = datetime.now()
-time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}[{current_time.hour}:{current_time.minute}:{current_time.second}]"
+time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}_{current_time.hour}-{current_time.minute}-{current_time.second}"
 total_length = len(houses)
-output = run_threads(4, houses, lock, write_lock)
+file_name = f"data/PhoeAddrResults-{time_stamp}.json"
+file_name = file_name.replace('\\', '/')
+#output = run_threads(4, houses, lock, write_lock)
+scrape_violations(houses, lock, write_lock)
 
 # Compute total time...
 end_time = time.time()

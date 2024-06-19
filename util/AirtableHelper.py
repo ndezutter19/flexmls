@@ -1,3 +1,4 @@
+from enum import Enum
 from pyairtable import Api
 from pyairtable import Table
 from pyairtable.formulas import match
@@ -7,89 +8,79 @@ import json
 import time
 import os
 
-code_vio_entry = {
-    'Address': '',
-    'Cases': []
-}
-
-case_entry = {
-    'Case Number': '',
-    'Address': [],
-    'Type of Violations': []
-}
-
-violation_entry = {
-    'ID': '',
-    'Name': '',
-}
+class EntryFormat(Enum):
+    CODE_VIO = {
+        'Address': '',
+        'Cases': []
+    }
+    CASE_ENTRY = {
+        'Case Number': '',
+        'Address': [],
+        'Type of Violations': []
+    }
+    TYPE_ENTRY = {
+        'ID': '',
+        'Name': '',
+    }
 
 def get_airtable(access_token):
     at = Api(access_token)
     return at
 
+def get_violation_types(table):
+    types = table.all()
+    cache = {}
+    for item in types:
+        cache[item['fields'].get('ID')] = item['id']
+    return cache
+
 def import_violations_data(file, file_lock: threading.Lock):
+    # Initialize api variables...
     base_id = 'appKY7QOvCIoZwI6b'
     key = os.getenv('AIRTABLE_API_KEY')
     api = get_airtable(key)
     
-    file_lock.acquire()
-    line = file.readline()
-    file_lock.release()
-    
+    # Initialize table objects...
     code_vio_table = api.table(base_id, 'Code Violations')
     cases_table = api.table(base_id, 'Complaint Cases')
     type_table = api.table(base_id, 'Type of Violations')
     
+    # Initialize other holder variables...
     new_entry = None
-    
-    types = type_table.all()
-    cached_types = {}
-    for item in types:
-        cached_types[item['fields'].get('ID')] = item['id']
-    
     code_vio_id = None
     case_id = None
     type_id = None
     
+    # Get violation types and cache them to prevent unneccessary requests...
+    cached_types = get_violation_types(type_table)
+    
+    # Read initiali line
+    file_lock.acquire()
+    line = file.readline()
+    file_lock.release()
+    
     while True:
         if line == '':
             break
+        
         as_json = json.loads(line)
         
         address = list(as_json.keys())[0]
-        print(f"Adding {address} to airtable.")
-        
         cases =  as_json[address]
         case_ids = list(cases.keys())
-
-        frm = match({'Address': address})
-        response = code_vio_table.all(formula=frm)
-        if response == []:
-            new_entry = code_vio_entry
-            new_entry['Address'] = address
-            response = code_vio_table.create(new_entry)
-            code_vio_id = response['id']
-        else:
-            code_vio_id = response[0].get('id')
         
+        print(f"Adding Address {address}, Case No(s): {case_ids}")
+
+        formula = match({'Address': address})
+        code_vio_id = does_element_exist(code_vio_table, EntryFormat.CODE_VIO, formula, **{'Address': address})
+
         record_ids = []
         for id in case_ids:
             # Check if case exists...
-            frm = match({'Case Number': id})
-            response = cases_table.all(formula=frm)
-            time.sleep(0.1)
-            if response == []:
-                new_entry = case_entry
-                new_entry['Case Number'] = id
-                new_entry['Address'] = [code_vio_id]
-                response = cases_table.create(new_entry)
-                time.sleep(0.1)
-                case_id = response['id']
-            else:
-                case_id = response[0].get('id')
+            formula = match({'Case Number': id})
+            case_id = does_element_exist(cases_table, EntryFormat.CASE_ENTRY, formula, **{'Case Number': id})
             record_ids.append(case_id)
 
-            # Check if the violation types exist within the violations table...
             violation_types = cases[id]
             reference_ids = get_violation_ids(type_table, violation_types, cached_types)
             cases_table.update(case_id, {'Type of Violations': reference_ids})
@@ -106,6 +97,25 @@ def import_violations_data(file, file_lock: threading.Lock):
         line = file.readline()
         file_lock.release()    
 
+def does_element_exist(table: Table, template, formula, **kwargs):
+    if not isinstance(template, EntryFormat):
+        raise TypeError('Provided format is invalid.')
+    
+    response = table.all(formula)
+    if response == []:
+        new_entry = template.value.copy()
+        for key, value in kwargs.items():
+            if key in new_entry:
+                new_entry[key] = value
+            else:
+                print(f"Warning: {key} is not a recognized key in the case entry template.")
+        
+        response = table.create(new_entry)
+    resp_id = response[0].get('id')
+    
+    return resp_id
+
+    
 
 def get_violation_ids(table: Table, violation_types, cache):
     ref = []
@@ -115,7 +125,7 @@ def get_violation_ids(table: Table, violation_types, cache):
         vio_type = split[1]
         
         if vio_id not in list(cache.keys()):
-            new_entry = violation_entry
+            new_entry = EntryFormat.TYPE_ENTRY.value.copy()
             new_entry['ID'] = vio_id
             new_entry['Name'] = vio_type
             response = table.create(new_entry)
