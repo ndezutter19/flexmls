@@ -10,7 +10,7 @@ import concurrent.futures
 import threading
 import traceback
 import json
-import os
+from tqdm import tqdm
 
 MONTHS_RECENT = 6
 form_url = "https://nsdonline.phoenix.gov"
@@ -126,17 +126,16 @@ def make_request(stNumber: int, stDirection: chr, stName: str):
         logging.error(f"There was an error when parsing address: {stNumber} {stDirection} {stName}", exc_info=True)
     return property
 
-def write_result(result):
-    print("Writing result")
-    
+def write_result(result):    
     with open(f'data/PhoeAddrResults-{time_stamp}.json', 'a') as file_out:
         file_out.write(json.dumps(result) + '\n')
 
-def scrape_violations(address_list, lock, write_lock):
+def scrape_violations(address_list, lock, write_lock, prog_bar):
     while len(address_list) != 0:
         # Get the lock to pop address safely...
         lock.acquire()
         address = address_list.pop()
+        prog_bar.update(1)
         lock.release()
         
         try:
@@ -164,19 +163,12 @@ def scrape_violations(address_list, lock, write_lock):
             return
     return True
 
-def run_threads(noThreads, addressList, lock, write_lock):
+def run_threads(noThreads, addressList, lock, write_lock, prog_bar):
     # Simple multithread...
     with futureproof.ThreadPoolExecutor(max_workers=noThreads + 1) as executor:
         # Submit tasks to the executor
-        futures = [executor.submit(scrape_violations, addressList, lock, write_lock) for i in range(noThreads)]
-        
-        # Collect results as they complete
-        results = {}
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-            results = result | results
-    
-    return results
+        futures = [executor.submit(scrape_violations, addressList, lock, write_lock, prog_bar) for i in range(noThreads)]
+
 
 # Timer for speed run fun...
 start_time = time.time()
@@ -185,6 +177,7 @@ lock = threading.Lock()
 write_lock = threading.Lock()
 res_lock = threading.Lock()
 houses = AddressHelper.get_addresses_csv()
+prog_bar = tqdm(total=len(houses), desc='Processing addresses...', unit='Address', bar_format='{l_bar} {bar} Addresses: {n_fmt}/{total_fmt} ({percentage:.1f}%)   Elapsed: {elapsed}   Remaining: {remaining}')
 result_buffer = []
 global total_length
 global file_name
@@ -192,9 +185,10 @@ current_time = datetime.now()
 time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}_{current_time.hour}-{current_time.minute}-{current_time.second}"
 total_length = len(houses)
 file_name = f"data/PhoeAddrResults-{time_stamp}.json"
-output = run_threads(4, houses, lock, write_lock)
+run_threads(4, houses, lock, write_lock, prog_bar)
 
 # Compute total time...
 end_time = time.time()
 delta_time = end_time - start_time
 print(f"Altogether took: {delta_time}s")
+prog_bar.close()
