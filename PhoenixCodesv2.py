@@ -194,7 +194,7 @@ current_time = datetime.now()
 time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}_{current_time.hour}-{current_time.minute}-{current_time.second}"
 total_length = len(houses)
 file_name = f"data/PhoeAddrResults-{time_stamp}.json"
-run_threads(6, houses, lock, write_lock, prog_bar)
+run_threads(4, houses, lock, write_lock, prog_bar)
 
 # Compute total time...
 end_time = time.time()
