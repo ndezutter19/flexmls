@@ -47,13 +47,24 @@ def parse_entry(case_a):
     entry_tree = etree.fromstring(case_response.text, parser=etree.HTMLParser())
     property_violations_pane = entry_tree.find(".//div[@id='propertyViolationsPane']")
     
+    if property_violations_pane is None:
+        return['LAW ENFORCEMENT EVENT']
     violation_headers = property_violations_pane.xpath("./div[@class='jumbotron jumbo-org-name']/span/strong")
     for violation in violation_headers:
         trim = violation.text.removeprefix("Violation Code: ")
         violations.append(trim)
     
     return violations
-        
+
+def clean_text(text):
+    if isinstance(text, str):
+        return text.strip()
+    elif text is None:
+        return None
+    else:
+        # Handle cases where text is not a string (e.g., numbers, other types)
+        return str(text).strip()
+
 def parse_table(html: str):
     cases = {}
     parser = etree.HTMLParser()
@@ -78,12 +89,10 @@ def parse_table(html: str):
         entry_contents = entry.xpath('./td')
         
         # Get open and close dates to check if recent, skip parsing if the status shows no violation found...
-        case_status = entry_contents[2].text.strip()
-        open_date = entry_contents[3].text.strip()
-        close_date = entry_contents[4].text
-        owner =  entry_contents[5].text.strip()
-        if close_date is not None:
-            close_date = close_date.strip()
+        case_status = clean_text(entry_contents[2])
+        open_date = clean_text(entry_contents[3])
+        close_date = clean_text(entry_contents[4])
+        owner =  clean_text(entry_contents[5])
         
         if isRecent(open_date, close_date) and violationConfirmed(case_status):
             case_number = entry[0]
@@ -158,9 +167,9 @@ def scrape_violations(address_list, lock, write_lock, prog_bar):
             traceback.print_exc()
             continue
         except:
-            print("Error occurred, exiting...")
+            print(f"Error occurred, skipping address: {address['Property Address']}")
             traceback.print_exc()
-            return
+            continue
     return True
 
 def run_threads(noThreads, addressList, lock, write_lock, prog_bar):
@@ -185,7 +194,7 @@ current_time = datetime.now()
 time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}_{current_time.hour}-{current_time.minute}-{current_time.second}"
 total_length = len(houses)
 file_name = f"data/PhoeAddrResults-{time_stamp}.json"
-run_threads(4, houses, lock, write_lock, prog_bar)
+run_threads(6, houses, lock, write_lock, prog_bar)
 
 # Compute total time...
 end_time = time.time()

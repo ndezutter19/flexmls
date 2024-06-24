@@ -162,7 +162,7 @@ def run_threads(noThreads, file, file_lock):
         futures = [executor.submit(import_violations_data, file, file_lock) for i in range(noThreads)]
 
         
-with open('data/PhoeAddrResultsTransfer2.json') as f:
+with open('data/PhoeAddrResultsTransfer.json') as f:
     file_lock = threading.Lock()
     run_threads(6, f, file_lock)
     
