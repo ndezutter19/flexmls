@@ -181,16 +181,19 @@ def run_threads(noThreads, addressList, lock, write_lock, prog_bar):
 
 # Timer for speed run fun...
 start_time = time.time()
+
+result_buffer = []
+global total_length
+global file_name
+
 # Create a lock to pass to all threads to prevent race conditions when accessing houses list...
 lock = threading.Lock()
 write_lock = threading.Lock()
 res_lock = threading.Lock()
 houses = AddressHelper.get_addresses_csv()
 prog_bar = tqdm(total=len(houses), desc='Processing addresses...', unit='Address', bar_format='{l_bar} {bar} Addresses: {n_fmt}/{total_fmt} ({percentage:.1f}%)   Elapsed: {elapsed}   Remaining: {remaining}')
-result_buffer = []
-global total_length
-global file_name
 current_time = datetime.now()
+
 time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}_{current_time.hour}-{current_time.minute}-{current_time.second}"
 total_length = len(houses)
 file_name = f"data/PhoeAddrResults-{time_stamp}.json"

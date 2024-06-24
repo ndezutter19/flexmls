@@ -71,9 +71,9 @@ def import_violations_data(file, file_lock: threading.Lock):
         address = as_json['address']
         cases =  as_json['cases']
         
-
+        in_mls = element_in_mls(address)
         formula = match({'Address': address})
-        code_vio_id = does_element_exist(code_vio_table, EntryFormat.CODE_VIO, formula, **{'Address': address})
+        code_vio_id = does_element_exist(code_vio_table, EntryFormat.CODE_VIO, formula, **{'Address': address, 'In MLS': in_mls})
 
         record_ids = []
         for case_id, case in cases.items():
@@ -106,6 +106,13 @@ def import_violations_data(file, file_lock: threading.Lock):
         file_lock.acquire()
         line = file.readline()
         file_lock.release()    
+
+def element_in_mls(address):
+    access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+    aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    aws_region = 'us-east-2'
+    
+    
 
 def does_element_exist(table: Table, template, form, **kwargs):
     if not isinstance(template, EntryFormat):
