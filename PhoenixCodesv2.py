@@ -89,10 +89,10 @@ def parse_table(html: str):
         entry_contents = entry.xpath('./td')
         
         # Get open and close dates to check if recent, skip parsing if the status shows no violation found...
-        case_status = clean_text(entry_contents[2])
-        open_date = clean_text(entry_contents[3])
-        close_date = clean_text(entry_contents[4])
-        owner =  clean_text(entry_contents[5])
+        case_status = clean_text(entry_contents[2].text)
+        open_date = clean_text(entry_contents[3].text)
+        close_date = clean_text(entry_contents[4].text)
+        owner =  clean_text(entry_contents[5].text)
         
         if isRecent(open_date, close_date) and violationConfirmed(case_status):
             case_number = entry[0]
