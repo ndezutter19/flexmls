@@ -3,8 +3,8 @@ import json
 import requests
 import time
 import os
+import util.ScrapeTools
 import csv
-import util.ScrapeTools as ScrapeTools
 import logging
 import re
 
@@ -53,7 +53,7 @@ def get_addresses():
     resp_json = response.json()
     data = resp_json['elements']
     print(f"Pre-sanitization Length: {len(data)}")
-    data = sanitize_data(data)
+    data = ScrapeTools.sanitize_data(data)
     print(f"Post-sanitization Length: {len(data)}")
     with open('data/sanitized_addresses.json', 'w') as f:
         addresses = {'addresses': data}
@@ -75,10 +75,11 @@ def parse_address_csv(address):
     pattern = (
         r'(?P<streetNum>\d+)\s+'
         r'(?P<streetDirection>[NSEW])\s+'
-        r'(?P<streetName>[a-zA-Z0-9\s]+?)\s+'
-        r'(?P<streetType>St|Dr|Rd|Ave|Blvd|Ln|Ct|Pl|Terr|Cir|Pkwy|Way|Trl)\s*'
+        r'(?P<streetName>[a-zA-Z0-9\s]+?)\s*'
+        r'(?:(?P<streetType>St|Dr|Rd|Ave|Blvd|Ln|Ct|Pl|Terr|Cir|Pkwy|Way|Trl)\s*)?'
         r'(?:Unit\s*(?P<unitNo>\d+))?'
     )
+
     logging.debug(f"Using pattern: {pattern}")
 
     # Match the pattern against the address
@@ -88,25 +89,5 @@ def parse_address_csv(address):
         logging.debug("Address matched successfully.")
         return match.groupdict()
     else:
-        logging.warning("Address could not be parsed.")
+        logging.warning(f"Address {address} could not be parsed.")
         return None
-    
-def sanitize_data(data: list):
-    sanitized = []
-    for element in data:
-        if 'amenity' in element['tags'].keys() or 'shop' in element['tags'].keys():
-            continue
-        street_route = element['tags']['addr:street'].split(' ')
-        street_direction = (street_route[0])[0]
-        street_type = ScrapeTools.get_abbreviated(street_route[len(street_route) - 1])
-        name_list = street_route[1:len(street_route) - 1]
-        street_name = ' '.join(name_list)
-        
-        sanitized.append({
-            'number': element['tags']['addr:housenumber'],
-            'streetName': street_name,
-            'streetDir': street_direction,
-            'streetType': street_type,
-        })
-    
-    return sanitized
