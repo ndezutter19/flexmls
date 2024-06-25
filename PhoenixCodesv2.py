@@ -113,7 +113,7 @@ def parse_table(html: str):
 
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def make_request(stNumber: int, stDirection: chr, stName: str):
+def make_request(stNumber: int, stDirection: chr, stName: str, unitNo):
     property = {}
     session = requests.Session()
     
@@ -150,12 +150,14 @@ def scrape_violations(address_list, lock, write_lock, prog_bar):
         try:
             # Breakdown address into constituent parts...
             breakdown = AddressHelper.parse_address_csv(address['Property Address'])
-            stNum = breakdown['streetNum']
+            stNum = breakdown['stNum']
             stDir = breakdown['streetDirection']
             stType = breakdown['streetType']
             stName = f"{breakdown['streetName']} {stType}"
+            unitNo = breakdown['unitNo']
+            if unitNo != None : stName.append(f" {unitNo}")
             
-            cases = make_request(stNum, stDir, stName)
+            cases = make_request(stNum, stDir, stName, unitNo)
             if len(cases.keys()) > 0:
                 write_lock.acquire()
                 write_result({'address': address['Property Address'],

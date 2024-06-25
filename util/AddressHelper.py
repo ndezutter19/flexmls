@@ -55,7 +55,7 @@ def parse_address_csv(address):
 
     # Define the regular expression pattern
     pattern = (
-        r'(?P<houseNum>\d+)\s+'
+        r'(?P<stNum>\d+)\s+'
         r'(?P<streetDirection>[NESW])\s+'
         r'(?P<streetName>[\w\s]+?)'
         r'\s*(?P<streetType>St|Dr|Rd|Ave|Blvd|Way|Ln)?'
