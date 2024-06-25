@@ -7,6 +7,9 @@ import threading
 import json
 import time
 import os
+import boto3
+from boto3.dynamodb.conditions import Key, Attr
+import traceback
 
 class EntryFormat(Enum):
     CODE_VIO = {
@@ -73,7 +76,7 @@ def import_violations_data(file, file_lock: threading.Lock):
         
         in_mls = element_in_mls(address)
         formula = match({'Address': address})
-        code_vio_id = does_element_exist(code_vio_table, EntryFormat.CODE_VIO, formula, **{'Address': address, 'In MLS': in_mls})
+        code_vio_id = element_in_airtable(code_vio_table, EntryFormat.CODE_VIO, formula, **{'Address': address, 'In MLS': in_mls})
 
         record_ids = []
         for case_id, case in cases.items():
@@ -88,7 +91,7 @@ def import_violations_data(file, file_lock: threading.Lock):
             if not (close_date == '' or close_date is None):
                 arg_dict['Close Date'] = close_date
             
-            case_id = does_element_exist(cases_table, EntryFormat.CASE_ENTRY, formula, **arg_dict)
+            case_id = element_in_airtable(cases_table, EntryFormat.CASE_ENTRY, formula, **arg_dict)
             record_ids.append(case_id)
 
             violation_types = case['violations']
@@ -108,13 +111,15 @@ def import_violations_data(file, file_lock: threading.Lock):
         file_lock.release()    
 
 def element_in_mls(address):
-    access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
-    aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-    aws_region = 'us-east-2'
-    
-    
+    try:
+        response = listing_table.scan(
+            FilterExpression=Attr('address').eq(address.lower())
+        )
+    except:
+        traceback.print_exc()
 
-def does_element_exist(table: Table, template, form, **kwargs):
+
+def element_in_airtable(table: Table, template, form, **kwargs):
     if not isinstance(template, EntryFormat):
         raise TypeError('Provided format is invalid.')
     
@@ -168,8 +173,17 @@ def run_threads(noThreads, file, file_lock):
         # Submit tasks to the executor
         futures = [executor.submit(import_violations_data, file, file_lock) for i in range(noThreads)]
 
-        
+global dynamodb, listing_table
+
+access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+aws_region = 'us-east-2'
+
+dynamodb = boto3.resource('dynamodb')
+listing_table = dynamodb.Table('HouseListings')
+    
+
 with open('data/PhoeAddrResultsTransfer.json') as f:
     file_lock = threading.Lock()
-    run_threads(6, f, file_lock)
+    run_threads(1, f, file_lock)
     

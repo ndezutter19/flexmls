@@ -40,24 +40,6 @@ def run_thread(complete_flag, buffer: list, end_point: list):
             end_point.append(house)
         except IndexError as e:
             time.sleep(5)
-
-def get_addresses():
-    overpass_url = "http://overpass-api.de/api/interpreter"
-    query = """
-    [out:json];
-    node["addr:street"]["addr:housenumber"]["addr:city"="Phoenix"](33.29026, -112.32462, 33.83972, -111.92556);
-    out;
-    """
-    
-    response = requests.get(overpass_url, params={'data': query})
-    resp_json = response.json()
-    data = resp_json['elements']
-    print(f"Pre-sanitization Length: {len(data)}")
-    data = ScrapeTools.sanitize_data(data)
-    print(f"Post-sanitization Length: {len(data)}")
-    with open('data/sanitized_addresses.json', 'w') as f:
-        addresses = {'addresses': data}
-        json.dump(addresses, f)
         
 def get_addresses_csv():
     with open('data/PhoenixAddr1of2.CSV', mode ='r') as file:    
