@@ -161,6 +161,7 @@ def scrape_violations(address_list, lock, write_lock, prog_bar):
             if len(cases.keys()) > 0:
                 write_lock.acquire()
                 write_result({'address': address['Property Address'],
+                              'apn': address['APN'],
                               'cases': cases})
                 write_lock.release()
         except TypeError:
@@ -193,13 +194,14 @@ lock = threading.Lock()
 write_lock = threading.Lock()
 res_lock = threading.Lock()
 houses = AddressHelper.get_addresses_csv()
+
 prog_bar = tqdm(total=len(houses), desc='Processing addresses...', unit='Address', bar_format='{l_bar} {bar} Addresses: {n_fmt}/{total_fmt} ({percentage:.1f}%)   Elapsed: {elapsed}   Remaining: {remaining}')
 current_time = datetime.now()
 
 time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}_{current_time.hour}-{current_time.minute}-{current_time.second}"
 total_length = len(houses)
 file_name = f"data/PhoeAddrResults-{time_stamp}.json"
-run_threads(5, houses, lock, write_lock, prog_bar)
+run_threads(1, houses, lock, write_lock, prog_bar)
 
 # Compute total time...
 end_time = time.time()

@@ -14,6 +14,7 @@ import traceback
 class EntryFormat(Enum):
     CODE_VIO = {
         'Address': '',
+        'APN': '',
         'Cases': []
     }
     CASE_ENTRY = {
@@ -21,6 +22,7 @@ class EntryFormat(Enum):
         'Owner/Occupant': '',
         'Status': '',
         'Open Date': '',
+        'Close Date': '',
         'Address': [],
         'Type of Violations': []
     }
@@ -74,9 +76,9 @@ def import_violations_data(file, file_lock: threading.Lock):
         address = as_json['address']
         cases =  as_json['cases']
         
-        in_mls = element_in_mls(address)
+        #in_mls = element_in_mls(address)
         formula = match({'Address': address})
-        code_vio_id = element_in_airtable(code_vio_table, EntryFormat.CODE_VIO, formula, **{'Address': address, 'In MLS': in_mls})
+        code_vio_id = element_in_airtable(code_vio_table, EntryFormat.CODE_VIO, formula, **{'Address': address, 'APN': as_json['apn']})
 
         record_ids = []
         for case_id, case in cases.items():
@@ -85,11 +87,11 @@ def import_violations_data(file, file_lock: threading.Lock):
             status = case['status']
             open_date = case['open date']
             close_date = case['close date']
+            if close_date == '':
+                close_date = None
             
             formula = match({'Case Number': case_id})
-            arg_dict =  {'Case Number': case_id, 'Owner/Occupant': owner, 'Status': status, 'Open Date': open_date}
-            if not (close_date == '' or close_date is None):
-                arg_dict['Close Date'] = close_date
+            arg_dict =  {'Case Number': case_id, 'Owner/Occupant': owner, 'Status': status, 'Open Date': open_date, 'Close Date': close_date}
             
             case_id = element_in_airtable(cases_table, EntryFormat.CASE_ENTRY, formula, **arg_dict)
             record_ids.append(case_id)
@@ -131,12 +133,16 @@ def element_in_airtable(table: Table, template, form, **kwargs):
                 new_entry[key] = value
             else:
                 print(f"Warning: {key} is not a recognized key in the case entry template.")
+                new_entry[key] = value
         
         resp = table.create(new_entry)
     elif template is EntryFormat.CASE_ENTRY:
-        check_case_updated(table, resp[0], **kwargs)
+        resp = resp[0]
+        check_case_updated(table, resp, **kwargs)
+    else:
+        resp = resp[0]
         
-    resp_id = resp[0].get('id')
+    resp_id = resp.get('id')
     
     return resp_id
 
@@ -181,9 +187,9 @@ aws_region = 'us-east-2'
 
 dynamodb = boto3.resource('dynamodb')
 listing_table = dynamodb.Table('HouseListings')
-    
+
 
 with open('data/PhoeAddrResultsTransfer.json') as f:
     file_lock = threading.Lock()
-    run_threads(1, f, file_lock)
+    run_threads(4, f, file_lock)
     
