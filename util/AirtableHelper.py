@@ -5,7 +5,6 @@ from pyairtable.formulas import match
 import futureproof
 import threading
 import json
-import time
 import os
 import boto3
 from boto3.dynamodb.conditions import Key, Attr

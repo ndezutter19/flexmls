@@ -1,5 +1,6 @@
 import re
 import logging
+from lxml import etree
 
 def break_down_address(address):
     # Define the regular expression pattern
@@ -66,3 +67,15 @@ def get_abbreviated(suffix: str):
     except KeyError:
         logging.warning(f"Abbreviated version of {temp} not found, returning input string, append to dictionary if need be.")
         return temp.upper()
+    
+def get_element(root, xpath_str):
+    """
+    Helper function to attempt to get something via xPath, if error is thrown because no such
+    element exists then None will be returned instead.
+    """
+    
+    try:
+        element = root.find(xpath_str)
+        return element
+    except:
+        return None

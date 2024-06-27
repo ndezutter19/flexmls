@@ -6,7 +6,6 @@ import futureproof
 from lxml import etree
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-import concurrent.futures
 import threading
 import traceback
 import json
@@ -139,7 +138,7 @@ def write_result(result):
     with open(f'data/PhoeAddrResults-{time_stamp}.json', 'a') as file_out:
         file_out.write(json.dumps(result) + '\n')
 
-def scrape_violations(address_list, lock, write_lock, prog_bar):
+def scrape_violations(address_list, lock, buffer_lock, prog_bar):
     while len(address_list) != 0:
         # Get the lock to pop address safely...
         lock.acquire()
@@ -159,11 +158,11 @@ def scrape_violations(address_list, lock, write_lock, prog_bar):
             
             cases = make_request(stNum, stDir, stName, unitNo)
             if len(cases.keys()) > 0:
-                write_lock.acquire()
-                write_result({'address': address['Property Address'],
+                buffer_lock.acquire()
+                buffer.append({'address': address['Property Address'],
                               'apn': address['APN'],
                               'cases': cases})
-                write_lock.release()
+                buffer_lock.release()
         except TypeError:
             # If an error occurs here it should be due to an address being incorrectly formatted so log as warning...
             logging.warning(f"Error in input data, address: {address['Property Address']}")
@@ -175,23 +174,24 @@ def scrape_violations(address_list, lock, write_lock, prog_bar):
             continue
     return True
 
-def run_threads(noThreads, addressList, lock, write_lock, prog_bar):
+def run_threads(noThreads, addressList, lock, buffer_lock, prog_bar):
     # Simple multithread...
     with futureproof.ThreadPoolExecutor(max_workers=noThreads + 1) as executor:
         # Submit tasks to the executor
-        futures = [executor.submit(scrape_violations, addressList, lock, write_lock, prog_bar) for i in range(noThreads)]
+        futures = [executor.submit(scrape_violations, addressList, lock, buffer_lock, prog_bar) for i in range(noThreads)]
 
 
 # Timer for speed run fun...
 start_time = time.time()
 
-result_buffer = []
+global buffer
+buffer = []
 global total_length
 global file_name
 
 # Create a lock to pass to all threads to prevent race conditions when accessing houses list...
 lock = threading.Lock()
-write_lock = threading.Lock()
+buffer_lock = threading.Lock()
 res_lock = threading.Lock()
 houses = AddressHelper.get_addresses_csv()
 
@@ -201,7 +201,7 @@ current_time = datetime.now()
 time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}_{current_time.hour}-{current_time.minute}-{current_time.second}"
 total_length = len(houses)
 file_name = f"data/PhoeAddrResults-{time_stamp}.json"
-run_threads(1, houses, lock, write_lock, prog_bar)
+run_threads(1, houses, lock, buffer_lock, prog_bar)
 
 # Compute total time...
 end_time = time.time()
