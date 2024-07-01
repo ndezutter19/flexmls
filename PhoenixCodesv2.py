@@ -1,18 +1,23 @@
 import logging
 import requests
-import time
 import util.AddressHelper as AddressHelper
-import futureproof
 from lxml import etree
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-import threading
 import traceback
 import json
-from tqdm import tqdm
 
-MONTHS_RECENT = 6
-form_url = "https://nsdonline.phoenix.gov"
+def get_config():
+    with open('config.json', 'r') as con_file:
+        file_json = json.load(con_file)
+        config = file_json['Scraping Constants']['Phoenix Code Scraper']
+        return config
+
+config = get_config()
+
+# Load constants...
+MONTHS_RECENT = config['IsRecent']
+url = config['Url']
 
 def isRecent(open, close):
     # If no close date found then it must be recent or active
@@ -40,14 +45,14 @@ def parse_entry(case_a):
     violations = []
     
     entry_url = case_a.get('href')
-    case_response = requests.get(form_url + entry_url)
+    case_response = requests.get(url + entry_url)
     
     # Get pane containing the titles of violations and extract their text...
     entry_tree = etree.fromstring(case_response.text, parser=etree.HTMLParser())
     property_violations_pane = entry_tree.find(".//div[@id='propertyViolationsPane']")
     
     if property_violations_pane is None:
-        return['LAW ENFORCEMENT EVENT']
+        return ['LAW ENFORCEMENT EVENT']
     violation_headers = property_violations_pane.xpath("./div[@class='jumbotron jumbo-org-name']/span/strong")
     for violation in violation_headers:
         trim = violation.text.removeprefix("Violation Code: ")
@@ -113,7 +118,6 @@ def parse_table(html: str):
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def make_request(stNumber: int, stDirection: chr, stName: str, unitNo):
-    property = {}
     session = requests.Session()
     
     # Set up data for session and requests...
@@ -125,30 +129,15 @@ def make_request(stNumber: int, stDirection: chr, stName: str, unitNo):
     }
     
     # Create session and post to it...
-    session.get(form_url, headers=headers)
-    response = session.post(f"{form_url}/CodeEnforcement", headers=headers, json=form_data)
-    
-    try:
-        property = parse_table(response.text)
-    except:
-        logging.error(f"There was an error when parsing address: {stNumber} {stDirection} {stName}", exc_info=True)
-    return property
+    session.get(url, headers=headers)
+    response = session.post(f"{url}/CodeEnforcement", headers=headers, json=form_data)
 
-def write_result(result):    
-    with open(f'data/PhoeAddrResults-{time_stamp}.json', 'a') as file_out:
-        file_out.write(json.dumps(result) + '\n')
+    return response.text
 
-def scrape_violations(address_list, lock, buffer_lock, prog_bar):
-    while len(address_list) != 0:
-        # Get the lock to pop address safely...
-        lock.acquire()
-        address = address_list.pop()
-        prog_bar.update(1)
-        lock.release()
-        
+def scrape_violations(property):
         try:
             # Breakdown address into constituent parts...
-            breakdown = AddressHelper.parse_address_csv(address['Property Address'])
+            breakdown = AddressHelper.parse_address_csv(property['Property Address'])
             stNum = breakdown['stNum']
             stDir = breakdown['streetDirection']
             stType = breakdown['streetType']
@@ -156,55 +145,21 @@ def scrape_violations(address_list, lock, buffer_lock, prog_bar):
             unitNo = breakdown['unitNo']
             if unitNo != None : stName.append(f" {unitNo}")
             
-            cases = make_request(stNum, stDir, stName, unitNo)
-            if len(cases.keys()) > 0:
-                buffer_lock.acquire()
-                buffer.append({'address': address['Property Address'],
-                              'apn': address['APN'],
-                              'cases': cases})
-                buffer_lock.release()
+            html = make_request(stNum, stDir, stName, unitNo)
+                
+            cases = parse_table(html)
+                
+            if len(cases.keys()) == 0:
+                return None
+            return cases
         except TypeError:
             # If an error occurs here it should be due to an address being incorrectly formatted so log as warning...
-            logging.warning(f"Error in input data, address: {address['Property Address']}")
+            logging.warning(f"Error in input data, address: {property['Property Address']}")
             traceback.print_exc()
-            continue
+            return None
         except:
-            print(f"Error occurred, skipping address: {address['Property Address']}")
+            print(f"Error occurred, skipping address: {property['Property Address']}")
             traceback.print_exc()
-            continue
-    return True
-
-def run_threads(noThreads, addressList, lock, buffer_lock, prog_bar):
-    # Simple multithread...
-    with futureproof.ThreadPoolExecutor(max_workers=noThreads + 1) as executor:
-        # Submit tasks to the executor
-        futures = [executor.submit(scrape_violations, addressList, lock, buffer_lock, prog_bar) for i in range(noThreads)]
+            return None
 
 
-# Timer for speed run fun...
-start_time = time.time()
-
-global buffer
-buffer = []
-global total_length
-global file_name
-
-# Create a lock to pass to all threads to prevent race conditions when accessing houses list...
-lock = threading.Lock()
-buffer_lock = threading.Lock()
-res_lock = threading.Lock()
-houses = AddressHelper.get_addresses_csv()
-
-prog_bar = tqdm(total=len(houses), desc='Processing addresses...', unit='Address', bar_format='{l_bar} {bar} Addresses: {n_fmt}/{total_fmt} ({percentage:.1f}%)   Elapsed: {elapsed}   Remaining: {remaining}')
-current_time = datetime.now()
-
-time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}_{current_time.hour}-{current_time.minute}-{current_time.second}"
-total_length = len(houses)
-file_name = f"data/PhoeAddrResults-{time_stamp}.json"
-run_threads(1, houses, lock, buffer_lock, prog_bar)
-
-# Compute total time...
-end_time = time.time()
-delta_time = end_time - start_time
-print(f"Altogether took: {delta_time}s")
-prog_bar.close()

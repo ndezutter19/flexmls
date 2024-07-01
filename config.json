@@ -2,12 +2,10 @@
     "Scraping Constants": {
         "Phoenix Code Scraper": {
             "IsRecent": 6,
-            "FormUrl": "https://nsdonline.phoenix.gov",
-            "Threads": 4
+            "Url": "https://nsdonline.phoenix.gov"
         },
         "Maricopa Parcel Scraper": {
             "Url": "https://mcassessor.maricopa.gov/mcs/?q=",
-            "Threads": 4,
             "Property Attributes": [
                 "lot size",
                 "high school district",
