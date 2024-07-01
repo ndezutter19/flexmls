@@ -20,7 +20,7 @@ def load_constants():
     # Get current date for timestamp to attach to written out file name...
     current_time = datetime.now()
     time_stamp = f"{current_time.year}-{current_time.month}-{current_time.day}_{current_time.hour}-{current_time.minute}-{current_time.second}"
-    filename = f"PhxScrapeResults{time_stamp}.json"
+    filename = f"data/PhxScrapeResults{time_stamp}.json"
 
     open(filename, 'w')
 
