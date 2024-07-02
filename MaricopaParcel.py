@@ -71,7 +71,7 @@ def check_house(property):
     additional = find_element(parcel_content, ".//div[@id='AddInfoSection']")
     
     # Confirm that the addresses match...
-    full_address = f'{address} {property['City']} {property['ZIP Code']}'
+    full_address = f"{address} {property['City']} {property['ZIP Code']}"
     if not address_match(full_address, prop):
         logging.warning(f'Address from parcel search of APN-{apn} does not match that of the given property @ address {address}')
         return {}
