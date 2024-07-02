@@ -68,9 +68,23 @@ def get_abbreviated(suffix: str):
         logging.warning(f"Abbreviated version of {temp} not found, returning input string, append to dictionary if need be.")
         return temp.upper()
     
-def get_element(root, xpath_str):
+def xpath_element(root, xpath_str):
     """
-    Helper function to attempt to get something via xPath, if error is thrown because no such
+    Helper function to attempt to get something with xpath AND using the xpath function which allows for inline functions to be executed,
+    if error is thrown because no such element exists then None will be returned instead.
+    """
+    
+    try:
+        elements = root.xpath(xpath_str)
+        if len(elements) > 1:
+            return elements
+        return elements[0]
+    except:
+        return None
+    
+def find_element(root, xpath_str):
+    """
+    Helper function to attempt to get something via with xpath but using the find function, if error is thrown because no such
     element exists then None will be returned instead.
     """
     

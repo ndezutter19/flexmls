@@ -3,7 +3,7 @@ import os
 from lxml import etree
 import json
 from util.AddressHelper import get_addresses_csv
-from  util.ScrapeTools import get_element
+from  util.ScrapeTools import xpath_element, find_element
 import logging
 import pprint
 import threading
@@ -13,6 +13,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+from bs4 import BeautifulSoup
+
 
 def get_config():
     
@@ -38,8 +40,9 @@ drive_lock = threading.Lock()
 
 def get_parcel_root(apn):
     # Initiallize driver and get queried page
+    parcel_url = url + apn
     drive_lock.acquire()
-    driver.get(url + apn)
+    driver.get(parcel_url)
     driver.implicitly_wait(1)
     WebDriverWait(driver, 10).until_not(EC.text_to_be_present_in_element("", (By.XPATH, ".//div[@id='valuation']")))
     
@@ -60,11 +63,12 @@ def check_house(property):
     root = get_parcel_root(apn)
     
     # Acquire the DOM elements of all relevant sections...
-    parcel_content = get_element(root, ".//div[@id='parcel-content']")
-    prop =  get_element(parcel_content, ".//div[@class='parcel-section bg-white rounded shadow py-3 px-3 pb-4 mb-4 col-12']")    
-    owner = get_element(parcel_content, ".//div[@id='owner']")
-    valuation = get_element(parcel_content, ".//div[@id='valuation']")
-    additional = get_element(parcel_content, ".//div[@id='AddInfoSection']")
+    parcel_content = find_element(root, ".//div[@id='parcel-content']")
+    prop =  find_element(parcel_content, ".//div[@class='parcel-section bg-white rounded shadow py-3 px-3 pb-4 mb-4 col-12']")
+    top_bar = xpath_element(parcel_content, './/div[contains(concat(" ", normalize-space(@class), " "), "parcel-section col-12 ")]')
+    owner = find_element(parcel_content, ".//div[@id='owner']")
+    valuation = find_element(parcel_content, ".//div[@id='valuation']")
+    additional = find_element(parcel_content, ".//div[@id='AddInfoSection']")
     
     # Confirm that the addresses match...
     if not address_match(f'{address} {property['City']} {property['ZIP Code']}', prop):
@@ -74,10 +78,13 @@ def check_house(property):
     # Run parse functions...
     prop_json = parse_property_section(prop)
     owner_json = parse_owner_section(owner)
-    valuation_json = parse_valuation_section(valuation)
     additional_json = parse_additional_section(additional)
     
-    aggregate = prop_json | owner_json | valuation_json | additional_json
+    aggregate = prop_json | owner_json | additional_json
+    
+    # Get parcel type...
+    parcel_type = xpath_element(top_bar, './/h3[contains(text(), "Parcel")]')
+    aggregate['parcel type'] = clean_text(parcel_type.text)
     
     return aggregate
     
@@ -93,7 +100,7 @@ def parse_property_section(section):
     if section is None:
         return {}
     
-    table = get_element(section, ".//div[@class='col-12 smaller-font']")
+    table = find_element(section, ".//div[@class='col-12 smaller-font']")
     
     children = get_relevant_children(table.getchildren(), property_attributes)
     
@@ -169,8 +176,8 @@ def parse_owner_section(section):
     if section is None:
         return {}
     
-    owner = get_element(section, ".//a").text 
-    table = get_element(section, ".//div[@class='col-12 smaller-font']")
+    owner = find_element(section, ".//a").text 
+    table = find_element(section, ".//div[@class='col-12 smaller-font']")
     
     children = table.getchildren()
     children = get_relevant_children(children, owner_attributes)
@@ -202,7 +209,7 @@ def parse_valuation_section(section):
     if section is None:
         return {}
     
-    table = get_element(section, ".//div[@id='valuation-data']")
+    table = find_element(section, ".//div[@id='valuation-data']")
     
     children = table.getchildren()
     children = get_relevant_children(children, valuation_attributes)
@@ -239,7 +246,7 @@ def parse_additional_section(section):
     if section is None:
         return {}
 
-    table = get_element(section, ".//div[@id='AdditionalInfoPanel']")
+    table = find_element(section, ".//div[@id='AdditionalInfoPanel']")
     
     children = table.getchildren()
     children = get_relevant_children(children, additional_prop_attributes)
@@ -249,7 +256,7 @@ def parse_additional_section(section):
     return parsed_additional
 
 def address_match(address, info_element):
-    parcel_address = get_element(info_element, ".//div[@class='col-md-11 pt-3 banner-text']/a").text
+    parcel_address = find_element(info_element, ".//div[@class='col-md-11 pt-3 banner-text']/a").text
     
     if parcel_address.lower() == address.lower():
         return True

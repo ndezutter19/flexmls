@@ -66,4 +66,5 @@ def scrape_address(property: dict):
 example = {'APN': '123-16-047', 'FIPS Code': '4013', 'County Name': 'Maricopa County', 'Property Address': '4034 E Pecan Rd', 'City': 'Phoenix', 'State': 'AZ', 'ZIP Code': '85040', 'Owner Name(s) Formatted': 'Neal & Regina Ruggie', 'Mailing Address': '4034 E Pecan Rd', 'Mailing City': 'Phoenix', 'Mailing State': 'AZ', 'Mailing ZIP Code': '85040', 'Subdivision': 'Knoell Garden Groves Unit 6', 'Detailed Property Type': 'Single Family Residential'}
 
 load_constants()
-run()
+scrape_address(example)
+# run()
