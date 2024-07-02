@@ -108,7 +108,7 @@ def parse_property_section(section):
 
     return parsed_property
 
-def parse_children(elements: list, **kwargs):
+def parse_children(elements: list):
     """Parses a list of children and forms them into a dict."""
     parsed = {}
     
