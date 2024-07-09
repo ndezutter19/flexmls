@@ -14,6 +14,7 @@
                 "subdivision"
             ],
             "Owner Attributes": [
+                "mailing address",
                 "sale date",
                 "sale price"
             ],

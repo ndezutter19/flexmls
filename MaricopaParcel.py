@@ -10,6 +10,7 @@ import threading
 import traceback
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
@@ -84,7 +85,7 @@ def check_house(property):
     
     # Get parcel type...
     parcel_type = xpath_element(top_bar, './/h3[contains(text(), "Parcel")]')
-    aggregate['parcel type'] = clean_text(parcel_type.text)
+    aggregate['Parcel Type'] = clean_text(parcel_type.text)
     
     return aggregate
     

@@ -14,7 +14,18 @@ class EntryFormat(Enum):
     CODE_VIO = {
         'Address': '',
         'APN': '',
-        'Cases': []
+        'Cases': [],
+        'Lot Size': None,
+        'High School District': None,
+        'Elementary School District': None,
+        'Local Jurisdiction': None,
+        'Sale Date': None,
+        'Sale Price': None,
+        'Owner': None,
+        'Mailing Address': None,
+        'Construction Year': None,
+        'Living Area': None,
+        'Parcel Type': None
     }
     CASE_ENTRY = {
         'Case Number': '',
@@ -48,7 +59,7 @@ def import_violations_data(file, file_lock: threading.Lock):
     api = get_airtable(key)
     
     # Initialize table objects...
-    code_vio_table = api.table(base_id, 'Code Violations')
+    code_vio_table = api.table(base_id, 'Addresses')
     cases_table = api.table(base_id, 'Complaint Cases')
     type_table = api.table(base_id, 'Type of Violations')
     
@@ -74,10 +85,16 @@ def import_violations_data(file, file_lock: threading.Lock):
         
         address = as_json['address']
         cases =  as_json['cases']
+        parcel_data = as_json['parcel data']
         
         #in_mls = element_in_mls(address)
         formula = match({'Address': address})
-        code_vio_id = element_in_airtable(code_vio_table, EntryFormat.CODE_VIO, formula, **{'Address': address, 'APN': as_json['apn']})
+        arg_dict: dict =  EntryFormat.CODE_VIO.value
+        arg_dict['Address'] = address
+        arg_dict['APN'] = as_json['apn']
+        arg_dict = process_parcel(arg_dict | parcel_data)
+        
+        code_vio_id = element_in_airtable(code_vio_table, EntryFormat.CODE_VIO, formula, **arg_dict)
 
         record_ids = []
         for case_id, case in cases.items():
@@ -111,6 +128,42 @@ def import_violations_data(file, file_lock: threading.Lock):
         line = file.readline()
         file_lock.release()    
 
+def process_parcel(data: dict):
+    shallow = data.copy()
+    if shallow['Lot Size'] != None:
+        lot_size = shallow['Lot Size']
+        lot_size = lot_size.removesuffix(" sq ft.")
+        lot_size = int(lot_size.replace(',', ''))
+        shallow['Lot Size'] = lot_size
+    
+    if shallow['Living Area'] != None:
+        living_area = shallow['Living Area']
+        living_area = living_area.removesuffix(" sq ft.")
+        living_area = int(living_area.replace(',', ''))
+        shallow['Living Area'] = living_area
+    
+    if shallow['Sale Date'] == 'n/a':
+        shallow['Sale Date'] = None
+    
+    if shallow['Sale Price'] == 'n/a':
+        shallow['Sale Price'] = None
+    elif shallow['Sale Price'] != None:
+        sale_price = shallow['Sale Price']
+        sale_price = sale_price.removeprefix('$')
+        sale_price = int(sale_price.replace(',', ''))
+        shallow['Sale Price'] = sale_price
+    
+    if shallow['Construction Year'] != None:
+        construction_year = int(shallow['Construction Year'])
+        shallow['Construction Year'] = construction_year
+    
+    for key in data.keys():
+        if shallow[key] == None:
+            shallow.pop(key)
+            
+    return shallow
+    
+
 def element_in_mls(address):
     try:
         response = listing_table.scan(
@@ -135,11 +188,9 @@ def element_in_airtable(table: Table, template, form, **kwargs):
                 new_entry[key] = value
         
         resp = table.create(new_entry)
-    elif template is EntryFormat.CASE_ENTRY:
-        resp = resp[0]
-        check_case_updated(table, resp, **kwargs)
     else:
         resp = resp[0]
+        check_case_updated(table, resp, **kwargs)
         
     resp_id = resp.get('id')
     
@@ -188,7 +239,7 @@ dynamodb = boto3.resource('dynamodb')
 listing_table = dynamodb.Table('HouseListings')
 
 
-with open('data/PhoeAddrResultsTransfer.json') as f:
+with open('data/PhxScrapeResultsParcelInclude.json') as f:
     file_lock = threading.Lock()
     run_threads(4, f, file_lock)
     
