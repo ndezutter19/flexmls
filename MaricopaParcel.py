@@ -185,6 +185,12 @@ def parse_owner_section(section):
     
     parsed_property = parse_children(children)
     parsed_property['Owner'] = owner
+    try: 
+        parsed_property['Mailing Address'] = parsed_property['Mailing Address'].split(',')[0]
+    except:
+        traceback.print_exc()
+        return parsed_property
+
     return parsed_property
     
 def clean_text(text):

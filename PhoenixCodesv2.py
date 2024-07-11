@@ -37,7 +37,7 @@ def isRecent(open, close):
 def violationConfirmed(status: str):
     # If violation status is 'closed no violation' found then return false...
     temp = status.lower()
-    if temp == "closed no violation found":
+    if temp == "closed no violation found" or temp == "closed compliance":
         return False
     return True
 
