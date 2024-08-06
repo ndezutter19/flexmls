@@ -67,7 +67,7 @@ def check_house(property):
     prop =  find_element(parcel_content, ".//div[@class='parcel-section bg-white rounded shadow py-3 px-3 pb-4 mb-4 col-12']")
     top_bar = xpath_element(parcel_content, './/div[contains(concat(" ", normalize-space(@class), " "), "parcel-section col-12 ")]')
     owner = find_element(parcel_content, ".//div[@id='owner']")
-    valuation = find_element(parcel_content, ".//div[@id='valuation']")
+    # valuation = find_element(parcel_content, ".//div[@id='valuation']")
     additional = find_element(parcel_content, ".//div[@id='AddInfoSection']")
     
     # Confirm that the addresses match...
