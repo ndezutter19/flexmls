@@ -40,7 +40,8 @@ def run():
                 prog_bar.update()
             except:
                 continue
-        
+            
+    prog_bar.close()
     
     # Compute total time...
     end_time = time.time()
